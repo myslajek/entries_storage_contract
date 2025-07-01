@@ -1,17 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.30;
+pragma solidity ^0.8.28;
 
 
 contract EntriesStorage {
     constructor() {
         contractOwner = msg.sender;
-        contractManagers[contractOwner] = true;
-        newEntryId = 1;
     }
 
     struct Entry {
-        uint256 id;
         string value;
         uint256 timestamp;
         address author;
@@ -19,14 +16,12 @@ contract EntriesStorage {
 
     Entry[] private entries;
 
-     uint256 private newEntryId; 
-
     address public contractOwner;
     
     mapping(address => bool) public contractManagers;
     
-    event EntryAdded(uint256 indexed entryId, address indexed user, Entry entry);
-    event EntryRemoved(uint256 indexed entryId, address indexed manager, Entry entry);
+    event EntryAdded(address indexed user, string value, uint256 index);
+    event EntryRemoved(address indexed manager, uint256 index, string value);
     event ManagerAdded(address indexed contractOwner, address indexed newManager);
     event ManagerRemoved(address indexed contractOwner, address indexed removedManager);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -41,15 +36,12 @@ contract EntriesStorage {
         _;
     }
     
-    function addEntry(string memory _value) public returns ( Entry  memory){
+    function addEntry(string memory _value) public returns (bool){
         require(bytes(_value).length > 0, "Entry cannot be empty");
         require(bytes(_value).length <= 1000, "Entry too long"); 
         require(entries.length < 1000000, "Maximum entries reached"); 
-
-        newEntryId++;
-
+ 
         Entry memory newEntry =  Entry({
-            id: newEntryId,
             value: _value,
             timestamp: block.timestamp,
             author: msg.sender
@@ -57,9 +49,9 @@ contract EntriesStorage {
         
         entries.push(newEntry);
 
-        emit EntryAdded(newEntryId ,msg.sender, newEntry);
+        emit EntryAdded(msg.sender, _value, entries.length - 1);
 
-        return newEntry;
+        return true;
     }
 
     function getAllEntries() public view returns (Entry[] memory) {
@@ -91,15 +83,16 @@ contract EntriesStorage {
         return entries.length;
     }
 
-    function removeEntry(uint256 _id)  onlyManagerOrOwner public returns (bool result) {
-        require(_id < entries.length, "Invalid index");
+    function removeEntry(uint256 _index)  onlyManagerOrOwner public returns (bool result) {
+        require(_index < entries.length, "Invalid index");
         
-        Entry memory removedValue = entries[_id];
+        Entry memory removedValue = entries[_index];
 
-        entries[_id] = entries[entries.length - 1];
+        //Cheaper solution then sorting
+        entries[_index] = entries[entries.length - 1];
         entries.pop();
         
-        emit EntryRemoved(_id, msg.sender, removedValue);
+        emit EntryRemoved(msg.sender, _index, removedValue.value);
 
         return true;
     }
@@ -153,8 +146,6 @@ contract EntriesStorage {
         if (contractManagers[previousOwner]) {
             contractManagers[previousOwner] = false;
         }
-
-        contractManagers[_newOwner] = true;
         
         emit OwnershipTransferred(previousOwner, _newOwner);
 
